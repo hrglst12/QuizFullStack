@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Quiz Admin</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2.1.1/css/pico.min.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.9/dist/cdn.min.js"></script>
+  <style>[x-cloak] { display: none !important; }</style>
+</head>
+<body>
+<main class="container" x-data="admin()" x-init="token && load()">
+  <h1>Quiz Admin</h1>
+  <p x-show="error" x-text="error" style="color: var(--pico-del-color)"></p>
+
+  <form x-show="!token" @submit.prevent="login()">
+    <input x-model="creds.username" placeholder="Username" autocomplete="username" required>
+    <input x-model="creds.password" type="password" placeholder="Password" autocomplete="current-password" required>
+    <button>Log in</button>
+  </form>
+
+  <div x-show="token" x-cloak>
+    <button class="outline secondary" @click="logout()">Log out</button>
+
+    <article>
+      <header><strong>Categories</strong></header>
+      <form role="group" @submit.prevent="submit('categories', cat)">
+        <input x-model="cat.name" placeholder="Category name" required maxlength="100">
+        <button x-text="cat.id ? 'Update' : 'Add'"></button>
+      </form>
+      <table>
+        <template x-for="c in categories" :key="c.id">
+          <tr>
+            <td x-text="c.name"></td>
+            <td x-text="`${c.question_count} questions`"></td>
+            <td>
+              <a href="#" @click.prevent="cat = { ...c }">Edit</a> ·
+              <a href="#" @click.prevent="remove('categories', c.id)">Delete</a>
+            </td>
+          </tr>
+        </template>
+      </table>
+    </article>
+
+    <article>
+      <header><strong x-text="q.id ? 'Edit question' : 'New question'"></strong></header>
+      <form @submit.prevent="submit('questions', q)">
+        <select x-model.number="q.category_id" required>
+          <option value="" disabled>Category</option>
+          <template x-for="c in categories" :key="c.id"><option :value="c.id" x-text="c.name"></option></template>
+        </select>
+        <input x-model="q.text" placeholder="Question" required>
+        <template x-for="n in 4" :key="n">
+          <div role="group">
+            <input type="radio" name="answer" x-model.number="q.answer_index" :value="n - 1" title="Correct answer">
+            <input x-model="q.options[n - 1]" :placeholder="`Option ${n}`" required>
+          </div>
+        </template>
+        <small>The selected radio button marks the correct answer.</small>
+        <button x-text="q.id ? 'Update' : 'Add'"></button>
+      </form>
+    </article>
+
+    <article>
+      <header>
+        <select x-model="filter" @change="load()">
+          <option value="">All categories</option>
+          <template x-for="c in categories" :key="c.id"><option :value="c.id" x-text="c.name"></option></template>
+        </select>
+      </header>
+      <table>
+        <template x-for="item in questions" :key="item.id">
+          <tr>
+            <td>
+              <strong x-text="item.text"></strong><br>
+              <small x-text="categoryName(item.category_id) + ' — ' + item.options[item.answer_index]"></small>
+            </td>
+            <td>
+              <a href="#" @click.prevent="q = { ...item, options: [...item.options] }; scrollTo(0, 0)">Edit</a> ·
+              <a href="#" @click.prevent="remove('questions', item.id)">Delete</a>
+            </td>
+          </tr>
+        </template>
+      </table>
+    </article>
+  </div>
+</main>
+
+<script>
+  const blankQuestion = () => ({ id: null, category_id: '', text: '', options: ['', '', '', ''], answer_index: 0 });
+
+  function admin() {
+    return {
+      token: localStorage.token || '', creds: { username: '', password: '' }, error: '',
+      categories: [], questions: [], filter: '', cat: { id: null, name: '' }, q: blankQuestion(),
+
+      async api(path, method = 'GET', body) {
+        const res = await fetch('/api' + path, {
+          method, body: body && JSON.stringify(body),
+          headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + this.token },
+        });
+        if (res.status === 401) { this.logout(); throw new Error('Session expired, please log in again'); }
+        if (!res.ok) {
+          const { detail } = await res.json();
+          throw new Error(typeof detail === 'string' ? detail : detail.map(e => e.msg).join('; '));
+        }
+        return res.status === 204 ? null : res.json();
+      },
+      // Runs a mutation, then reloads the lists; shows any failure and resolves to true on success.
+      async run(action) {
+        try { this.error = ''; await action(); } catch (e) { return !(this.error = e.message); }
+        await this.load();
+        return true;
+      },
+      async login() {
+        const res = await fetch('/api/admin/login', { method: 'POST', body: new URLSearchParams(this.creds) });
+        if (!res.ok) return this.error = 'Incorrect username or password';
+        this.token = localStorage.token = (await res.json()).access_token;
+        this.creds.password = this.error = '';
+        await this.load();
+      },
+      logout() { this.token = ''; localStorage.removeItem('token'); },
+      async load() {
+        try {
+          this.categories = await this.api('/categories');
+          this.questions = await this.api('/admin/questions' + (this.filter ? `?category_id=${this.filter}` : ''));
+        } catch (e) { this.error = e.message; }
+      },
+      categoryName(id) { return this.categories.find(c => c.id === id)?.name; },
+      async submit(resource, { id, ...body }) {
+        const ok = await this.run(() => this.api(`/admin/${resource}` + (id ? `/${id}` : ''), id ? 'PUT' : 'POST', body));
+        if (ok) resource === 'categories' ? this.cat = { id: null, name: '' } : this.q = blankQuestion();
+      },
+      async remove(resource, id) {
+        if (confirm('Delete this item?')) await this.run(() => this.api(`/admin/${resource}/${id}`, 'DELETE'));
+      },
+    };
+  }
+</script>
+</body>
+</html>
