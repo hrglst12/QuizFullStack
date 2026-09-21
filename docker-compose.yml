@@ -9,6 +9,23 @@ services:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U quiz -d quiz"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+
+  app:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      # .env points at localhost for running outside Docker; inside the network the database is called "db".
+      DATABASE_URL: postgresql+psycopg://quiz:quiz@db:5432/quiz
+    ports:
+      - "8000:8000"
 
 volumes:
   pgdata:

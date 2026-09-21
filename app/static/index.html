@@ -1,69 +1,30 @@
 <!doctype html>
-<html lang="en">
+<html lang="tr">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#000000">
   <title>Quiz</title>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2.1.1/css/pico.min.css">
-  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.9/dist/cdn.min.js"></script>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6'/%3E%3Ctext x='16' y='24' font-size='22' text-anchor='middle' fill='%23c9a96e' font-family='Georgia,serif'%3EQ%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-<main class="container" x-data="quiz()" x-init="init()">
-  <h1>Quiz</h1>
-
-  <section x-show="!questions.length">
-    <h3>Pick a category</h3>
-    <p x-show="!categories.length"><em>No categories yet.</em></p>
-    <div class="grid">
-      <template x-for="c in categories" :key="c.id">
-        <button :disabled="!c.question_count" @click="start(c.id)" x-text="`${c.name} (${c.question_count})`"></button>
-      </template>
+  <header class="top">
+    <div class="wrap bar">
+      <a class="brand" href="/">QUIZ</a>
+      <nav>
+        <a href="/admin/">Yönetim</a>
+        <a href="/docs">API</a>
+      </nav>
     </div>
-  </section>
+  </header>
 
-  <section x-show="questions.length && !done">
-    <progress :value="pos" :max="questions.length"></progress>
-    <h3 x-text="q?.text"></h3>
-    <template x-for="(opt, n) in q?.options" :key="n">
-      <button class="outline" style="width: 100%"
-              :class="{ contrast: result && n === result.answer_index, secondary: result && n === picked && !result.correct }"
-              :disabled="result" @click="answer(n)"
-              x-text="(result && n === result.answer_index ? '✓ ' : result && n === picked ? '✗ ' : '') + opt"></button>
-    </template>
-    <button x-show="result" @click="next()" x-text="pos + 1 < questions.length ? 'Next' : 'Finish'"></button>
-  </section>
+  <main class="wrap" id="app">
+    <noscript><p class="muted">Bu sayfanın çalışması için JavaScript gerekli.</p></noscript>
+  </main>
 
-  <section x-show="done">
-    <h3 x-text="`You scored ${score} / ${questions.length}`"></h3>
-    <button @click="reset()">Play again</button>
-  </section>
-</main>
-
-<script>
-  function quiz() {
-    return {
-      categories: [], questions: [], pos: 0, score: 0, picked: null, result: null, done: false,
-      get q() { return this.questions[this.pos]; },
-      async init() { this.categories = await (await fetch('/api/categories')).json(); },
-      async start(id) {
-        this.questions = await (await fetch(`/api/categories/${id}/questions`)).json();
-        Object.assign(this, { pos: 0, score: 0, picked: null, result: null, done: false });
-      },
-      async answer(n) {
-        this.picked = n;
-        const res = await fetch(`/api/questions/${this.q.id}/answer`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ choice: n }),
-        });
-        this.result = await res.json();
-        if (this.result.correct) this.score++;
-      },
-      next() {
-        this.picked = this.result = null;
-        if (++this.pos >= this.questions.length) this.done = true;
-      },
-      reset() { this.questions = []; this.init(); },
-    };
-  }
-</script>
+  <script src="/common.js"></script>
+  <script src="/quiz.js"></script>
 </body>
 </html>

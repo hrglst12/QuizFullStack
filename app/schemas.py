@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
@@ -12,6 +13,28 @@ class ORM(BaseModel):
 class Token(BaseModel):
     access_token: str
     token_type: str = "bearer"
+
+
+Username = Annotated[Text, Field(max_length=50)]
+Password = Annotated[str, Field(min_length=8, max_length=128)]
+
+
+class UserCreate(BaseModel):
+    username: Username
+    password: Password
+
+
+class UserUpdate(BaseModel):
+    username: Username
+    password: Password | None = None  # omitted = keep the current password
+
+
+class UserOut(ORM):
+    """Never includes the password hash."""
+
+    id: int
+    username: str
+    created_at: datetime
 
 
 class CategoryIn(BaseModel):
@@ -56,3 +79,22 @@ class AnswerIn(BaseModel):
 class AnswerOut(BaseModel):
     correct: bool
     answer_index: int
+
+
+class QuestionAnswer(AnswerIn):
+    question_id: int
+
+
+class ScoreIn(BaseModel):
+    """A finished game: the server grades the answers itself instead of trusting a client-side score."""
+
+    player_name: Text = Field(max_length=50)
+    answers: list[QuestionAnswer] = Field(min_length=1, max_length=50)
+
+
+class ScoreOut(ORM):
+    id: int
+    player_name: str
+    score: int
+    total: int
+    created_at: datetime

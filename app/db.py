@@ -22,7 +22,10 @@ def get_db():
 DB = Annotated[Session, Depends(get_db)]
 
 
+LABELS = {"Category": "Kategori", "Question": "Soru", "User": "Kullanıcı"}
+
+
 def get_or_404(db: Session, model: type[Base], id: int):
     if (obj := db.get(model, id)) is None:
-        raise HTTPException(404, f"{model.__name__} not found")
+        raise HTTPException(404, f"{LABELS.get(model.__name__, model.__name__)} bulunamadı")
     return obj
